@@ -1,4 +1,4 @@
-import os, socket, sys
+import os, socket, sys, MessageType
 CLIENT_PATH = "Client\\"
 DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 9999
@@ -6,6 +6,7 @@ SECURITY_PASS = "A secure string"
 OK_MESSAGE = "All clear, connection correctly doodled"
 DEBUG = False
 FILE_PATH = 'Client/'
+username = ''
 
 #Used for debugging, information is printed if in debug mode
 def log(info) :
@@ -13,21 +14,22 @@ def log(info) :
     if(DEBUG) : 
         print('Log::\t' + info + '\n')
 
-def queryServer() :
+def queryServer(path, name, socket):
+    packet = str(MessageType.QUERY) + '\n' + path + '\n' + name
+    log('Checking server for file: ' + name + ' in path: ' + path)
+    socket.sendall(packet)
+    reply = socket.recv(1024)
+    print reply
+
+def query(socket) :
     filepath = raw_input("\nEnter filepath to check: ")
     filename = raw_input("\nEnter filename to check: ")
-    if os.path.exists(filepath):
-        print "\n", filepath, "\nIs a directory"
-        if os.path.isfile(filename + "\\" + filepath) :
-            print "File found successfully\n"
-        else :
-            print "\nThe file: ", filename , " could not be found"
-    else :
-        print "No such directory exists"
-
+    #
+    queryServer(filepath, filename, sock
 
 def checkConnection(socket) :    
-    socket.sendall(SECURITY_PASS)
+    global username
+    socket.sendall(SECURITY_PASS + '\n' + username)
     reply = socket.recv(1024)
     log('Received ' + reply)
     con = reply == OK_MESSAGE
@@ -54,24 +56,24 @@ def connectionLoop(host, port) :
     sock = connectToServer(host, port)
     running = sock != None
     while (running) :
-        query = raw_input("Select option:\n1) Query server\n2) Open File\n3) Write file\n4) Kill server\nx) Close Connection\n\n")
-        if(query == "x" or query == "X"):
+        response = raw_input("Select option:\n1) Query server\n2) Open File\n3) Write file\n4) Kill server\nx) Close Connection\n\n")
+        if(response == "x" or response == "X"):
             running = False
         else :
-            if(query == "1") :
-                queryServer()
+            if(response == "1") :
+                query(sock)
             else :
-                if(query == "4") : 
+                if(response == "4") : 
                     killServer(sock)
                     running = False
                 else : 
-                    print "You said: " , query, "\n"
+                    print "You said: " , response, "\n"
     print "Closing connection...."
     sock.close()
     
 def openConnection() :
-    port = raw_input("\nEnter the port number: ")
-    if type(user_input) == int:
+    userIn = raw_input("\nEnter the port number: ")
+    if type(userIn) == int:
         port = int(port)
         try:
             host = raw_input("\nEnter the IP address of the host: ")
@@ -84,10 +86,13 @@ def openConnection() :
         print("\nPort number must be an integer")
 
 def main() :
-    global DEFAULT_HOST, DEFAULT_PORT, DEBUG
+    global DEFAULT_HOST, DEFAULT_PORT, DEBUG, FILE_PATH, username
     programRunning = True
-    if(len(sys.argv) > 1) :
-        DEBUG = sys.argv[1] > 0
+    username = sys.argv[1]
+    FILE_PATH = FILE_PATH + username + '/'
+    if(len(sys.argv) > 2) :
+        DEBUG = sys.argv[2] > 0
+    log('User: ' + username + ' logged in, files stored at: '+ FILE_PATH)
     while(programRunning) :
         query = raw_input("Select option:\n1) Open connection\n2) Default connection\nx) Exit Program\n\n")
         if(query == "x" or query == "X"):

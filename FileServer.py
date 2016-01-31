@@ -1,4 +1,4 @@
-import socket, select, thread, mutex, sys
+import socket, select, thread, mutex, sys, MessageType, os
 from threading import Thread, Lock
 from Queue import Queue
 
@@ -45,6 +45,36 @@ def log(info) :
     if(DEBUG) : 
         print('Log::\t' + info + '\n')
 
+#Check the client has sent an authentic security pass, of the required format
+def passSecurity(packet):
+    passed = False
+    name = 'ERROR'
+    data = packet.split('\n')
+    if(len(data) > 1) :
+        passed = data[0] == SECURITY_PASS
+        name = data[1]
+    return (passed, name)
+
+#Function for opening files, downloads file to client and allows the client to modify file
+def openFile(path, packet, conn):
+    log('Client opening file: ' + packet[1] )
+
+def queryDirectory(path, packet, conn):
+    directory = path + packet[1] + '/'
+    fileName = packet[2]
+    fullPath = directory + fileName
+    reply = 'File found successfully'
+    log('Client querying directory: ' + directory + ' for file: ' + fileName)
+    if os.path.exists(path):
+        if os.path.isfile(fullPath) :
+            print "File found successfully\n"
+        else :
+            reply = "The file: " + fileName + " could not be found"
+    else :
+        reply = "No such directory exists"
+    log(reply)
+    conn.sendall(reply)
+
 #Function to handle connections to server
 def handleClient(connection, address):
     global port, ID, IP_Address, MAX_DATA_LENGTH
@@ -52,21 +82,30 @@ def handleClient(connection, address):
     data = connection.recv(MAX_DATA_LENGTH)#Get data
     keepRunning = True
 
-    connectionOpen = data == SECURITY_PASS
+    connectionOpen, username = passSecurity(data)
     if(connectionOpen):#Return requested info to client
-        log("Client has successfully passed security check")
+        log('Client: ' + username + ' has successfully passed security check')
         connection.sendall(OK_MESSAGE)    
-    while connectionOpen:
-        data = connection.recv(MAX_DATA_LENGTH)#Get data
-        if(not data) :
-            connectionOpen = False
-        elif(data == "KILL_SERVICE\n") :
-            log("Server shutdown initiated")
-            setOnline(False)#Turn server off
-            keepRunning = False#Return false to stop this thread
-        else:
-            #do nothing
-            1+1
+        localPath = FILE_PATH + username + '/' 
+        while connectionOpen:
+            data = connection.recv(MAX_DATA_LENGTH)#Get data
+            log('Packet received: ' + data)
+            if(not data) :
+                connectionOpen = False
+            elif(data == 'KILL_SERVICE\n') :
+                log("Server shutdown initiated")
+                setOnline(False)#Turn server off
+                keepRunning = False#Return false to stop this thread
+            else:
+                info = data.split('\n')
+                header = data[0]
+                log('Header: ' + header)
+                header = int(header)
+                if(header == MessageType.OPEN_FILE):
+                    openFile(localPath, info, connection)
+                elif(header == MessageType.QUERY):
+                    queryDirectory(localPath, info, connection)
+
     log('Connection closed, freeing thread...')
     return keepRunning
 
@@ -101,21 +140,22 @@ class ThreadPool: #Thread pool class
 
 
 def main(): 
-    global DEBUG, NUM_THREADS, QUEUE_SIZE, DEFAULT_PORT, IP_Address, SERVER_FILE
+    global DEBUG, NUM_THREADS, QUEUE_SIZE, DEFAULT_PORT, IP_Address, SERVER_FILE, FILE_PATH
     try: 
         port = DEFAULT_PORT
-        DIRECTORY = sys.argv[1]
-        if(len(sys.argv) > 3) : #Get port number from command line
+        FILE_PATH = FILE_PATH + sys.argv[1] + '/'
+        if(len(sys.argv) > 2) : #Get port number from command line
             DEBUG = sys.argv[2] > 0
-            if(len(sys.argv) > 2) :
-                port = int(sys.argv[2])
-                if(len(sys.argv) > 3 ):
-                    SERVER_FILE = sys.argv[3]
-                    if(len(sys.argv) > 4):
-                        NUM_THREADS = int(sys.argv[4])
-                        if(len(sys.argv) > 4):
-                            QUEUE_SIZE = in5(sys.argv[5])           
-        log("IP: " + IP_Address)
+            if(len(sys.argv) > 3) :
+                port = int(sys.argv[3])
+                if(len(sys.argv) > 4 ):
+                    SERVER_FILE = sys.argv[4]
+                    if(len(sys.argv) > 5):
+                        NUM_THREADS = int(sys.argv[5])
+                        if(len(sys.argv) > 6):
+                            QUEUE_SIZE = in5(sys.argv[6])           
+        log('IP: ' + IP_Address)
+        log('Server files locatted at: ' + FILE_PATH)
         HOST = '' #Start on localhost
         pool = ThreadPool(NUM_THREADS, QUEUE_SIZE)   #Create Thread pool with queue size stated
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -1,0 +1,2 @@
+class MessageType:
+    QUERY, CREATE_DIRECTORY, OPEN_FILE, READ_FILE, WRITE_FILE = range(5)

@@ -1,3 +1,9 @@
+'''
+Author: Eoin Murphy
+
+File: Client side system to access files. Should be separated into the interface and the proxt
+'''
+
 import os, socket, sys, MessageType
 CLIENT_PATH = "Client\\"
 DEFAULT_HOST = 'localhost'
@@ -21,11 +27,10 @@ def queryServer(path, name, socket):
     reply = socket.recv(1024)
     print reply
 
-def query(socket) :
+def query() :
     filepath = raw_input("\nEnter filepath to check: ")
     filename = raw_input("\nEnter filename to check: ")
-    #
-    queryServer(filepath, filename, sock
+    return (filepath, filename)
 
 def checkConnection(socket) :    
     global username
@@ -51,6 +56,41 @@ def killServer(socket):
     socket.sendall("KILL_SERVICE\n")
     log('Server shutdown!')
 
+def openFile(filepath, filename, socket):
+    global FILE_PATH
+    packet = str(MessageType.OPEN_FILE) + '\n' + filepath + '\n' + filename
+    socket.sendall(packet)
+    reply = socket.recv(1024)
+    if(reply == str(MessageType.FILE_FOUND)):
+        localpath = FILE_PATH + filepath + '/' + filename
+        f = open(localpath, 'w')
+        log('File found, beginning download...')
+        openConn = True
+        while (openConn):
+            data = socket.recv(1024)
+            f.write(str(data))
+            log(data)
+            openConn = len(data) == 1024
+        log('Transmission complete, closing file...')
+        f.close()
+    else:
+        print 'File could not be found. Please try a different file.'
+
+def writeFile(filepath, filename, socket):
+    global FILE_PATH
+    packet = str(MessageType.WRITE_FILE) + '\n' + filepath + '\n' + filename
+    socket.sendall(packet)
+    localpath = FILE_PATH + filepath + '/' + filename
+    f = open(localpath, 'r')
+    log('File found, beginning upload...')
+    moreData = True    
+    data = f.read(1024)
+    while (moreData):
+        socket.sendall(str(data))
+        data = f.read(1024)
+        moreData = data != ''
+    log('Transmission complete, closing file...')
+    f.close()
 
 def connectionLoop(host, port) : 
     sock = connectToServer(host, port)
@@ -61,7 +101,14 @@ def connectionLoop(host, port) :
             running = False
         else :
             if(response == "1") :
-                query(sock)
+                filepath, filename = query()
+                queryServer(filepath, filename, sock)
+            elif(response == '2'):
+                filepath, filename = query()
+                openFile(filepath, filename, sock)
+            elif(response == '3'):
+                filepath, filename = query()
+                writeFile(filepath, filename, sock)
             else :
                 if(response == "4") : 
                     killServer(sock)

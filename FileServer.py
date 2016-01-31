@@ -1,3 +1,11 @@
+'''
+Author: Eoin Murphy
+
+Example File Server that controls access to the files on its system
+
+Clients should contact a directory server to find the correct address of this system and then contact this 
+for transfer of files.
+'''
 import socket, select, thread, mutex, sys, MessageType, os
 from threading import Thread, Lock
 from Queue import Queue
@@ -57,27 +65,66 @@ def passSecurity(packet):
 
 #Function for opening files, downloads file to client and allows the client to modify file
 def openFile(path, packet, conn):
-    log('Client opening file: ' + packet[1] )
+    directory = path + packet[1] + '/'
+    fileName = packet[2]
+    fullPath = directory + fileName
+    log('Client opening file: ' + fullPath )
+    if os.path.isfile(fullPath):
+        log('File found, transmission beginning...')
+        reply = str(MessageType.FILE_FOUND)
+        conn.sendall(reply)
+        f = open(fullPath)
+        data = f.read(1024)
+        while( data != '' ):
+            conn.sendall(data)
+            data = f.read(1024) 
+        log('File successfully transmitted.')
+        f.close()
+    else:
+        reply = str(MessageType.FILE_NOT_FOUND)
+        conn.sendall(reply)
 
+#Function to creat the necessary directories if none exist
+def handleDir(directory) :
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+#Function to receive uploads of files and write them to the server
+def receiveFile(path, packet, conn):
+    directory = path + packet[1] + '/'
+    fileName = packet[2]
+    fullPath = directory + fileName
+    log('Client uploading file: ' + fileName + ' in directory ' + directory)
+    handleDir(directory)
+    f = open(fullPath, 'w')
+    log('File found, beginning download...')
+    openConn = True
+    while (openConn):
+        data = conn.recv(1024)
+        f.write(data)
+        openConn = len(data) == 1024
+    log('Transfer complete, closing file...')
+    f.close()
+
+
+#Function to handle queries about the existence of files
 def queryDirectory(path, packet, conn):
     directory = path + packet[1] + '/'
     fileName = packet[2]
     fullPath = directory + fileName
-    reply = 'File found successfully'
+    reply = str(MessageType.FILE_FOUND)
     log('Client querying directory: ' + directory + ' for file: ' + fileName)
     if os.path.exists(path):
-        if os.path.isfile(fullPath) :
-            print "File found successfully\n"
-        else :
-            reply = "The file: " + fileName + " could not be found"
+        if (not (os.path.isfile(fullPath))) :
+            reply = str(MessageType.FILE_NOT_FOUND)
     else :
-        reply = "No such directory exists"
+        reply = str(MessageType.DIRECTORY_NOT_FOUND)
     log(reply)
     conn.sendall(reply)
 
 #Function to handle connections to server
 def handleClient(connection, address):
-    global port, ID, IP_Address, MAX_DATA_LENGTH
+    global port, ID, IP_Address, MAX_DATA_LENGTH, FILE_PATH
     print 'Connected by ', address    
     data = connection.recv(MAX_DATA_LENGTH)#Get data
     keepRunning = True
@@ -103,6 +150,8 @@ def handleClient(connection, address):
                 header = int(header)
                 if(header == MessageType.OPEN_FILE):
                     openFile(localPath, info, connection)
+                elif(header == MessageType.WRITE_FILE):
+                    receiveFile(localPath, info, connection)
                 elif(header == MessageType.QUERY):
                     queryDirectory(localPath, info, connection)
 

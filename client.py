@@ -1,9 +1,17 @@
-kimport os, socket
+import os, socket, sys
 CLIENT_PATH = "Client\\"
 DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 9999
 SECURITY_PASS = "A secure string"
 OK_MESSAGE = "All clear, connection correctly doodled"
+DEBUG = False
+FILE_PATH = 'Client/'
+
+#Used for debugging, information is printed if in debug mode
+def log(info) :
+    global DEBUG
+    if(DEBUG) : 
+        print('Log::\t' + info + '\n')
 
 def queryServer() :
     filepath = raw_input("\nEnter filepath to check: ")
@@ -21,7 +29,7 @@ def queryServer() :
 def checkConnection(socket) :    
     socket.sendall(SECURITY_PASS)
     reply = socket.recv(1024)
-    print '\nReceived ', reply
+    log('Received ' + reply)
     con = reply == OK_MESSAGE
     return con
     
@@ -39,8 +47,7 @@ def connectToServer(host, port) :
     
 def killServer(socket):
     socket.sendall("KILL_SERVICE\n")
-    data = socket.recv(1024)
-    print '\nReceived ',data
+    log('Server shutdown!')
 
 
 def connectionLoop(host, port) : 
@@ -77,8 +84,10 @@ def openConnection() :
         print("\nPort number must be an integer")
 
 def main() :
-    global DEFAULT_HOST, DEFAULT_PORT
+    global DEFAULT_HOST, DEFAULT_PORT, DEBUG
     programRunning = True
+    if(len(sys.argv) > 1) :
+        DEBUG = sys.argv[1] > 0
     while(programRunning) :
         query = raw_input("Select option:\n1) Open connection\n2) Default connection\nx) Exit Program\n\n")
         if(query == "x" or query == "X"):

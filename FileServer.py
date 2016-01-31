@@ -12,7 +12,8 @@ SERVER_FILE = "Server/"
 QUEUE_SIZE = NUM_THREADS*3 #Default size for queue, based on number of threads
 SECURITY_PASS = "A secure string"
 OK_MESSAGE = "All clear, connection correctly doodled"
-print "IP: ", IP_Address
+DEBUG = False
+FILE_PATH = 'Server/'
 
 #Simple function to stop any Worker that runs it
 def stopWorker():
@@ -38,20 +39,35 @@ def readOnline():
         shutdownLock.release()
     return result
 
+#Used for debugging, information is printed if in debug mode
+def log(info) :
+    global DEBUG
+    if(DEBUG) : 
+        print('Log::\t' + info + '\n')
+
 #Function to handle connections to server
 def handleClient(connection, address):
     global port, ID, IP_Address, MAX_DATA_LENGTH
-    print 'Connected by ', address
+    print 'Connected by ', address    
     data = connection.recv(MAX_DATA_LENGTH)#Get data
     keepRunning = True
-    if(data == "KILL_SERVICE\n") :
-        setOnline(False)#Turn server off
-        keepRunning = False#Return false to stop this thread
-    elif(data == SECURITY_PASS):#Return requested info to client
+
+    connectionOpen = data == SECURITY_PASS
+    if(connectionOpen):#Return requested info to client
+        log("Client has successfully passed security check")
         connection.sendall(OK_MESSAGE)    
-    else:
-        #do nothing
-        1+1
+    while connectionOpen:
+        data = connection.recv(MAX_DATA_LENGTH)#Get data
+        if(not data) :
+            connectionOpen = False
+        elif(data == "KILL_SERVICE\n") :
+            log("Server shutdown initiated")
+            setOnline(False)#Turn server off
+            keepRunning = False#Return false to stop this thread
+        else:
+            #do nothing
+            1+1
+    log('Connection closed, freeing thread...')
     return keepRunning
 
 class Worker(Thread):
@@ -84,38 +100,43 @@ class ThreadPool: #Thread pool class
 #        self.queue.join()
 
 
-
-try: 
-    if(len(sys.argv) < 2) : #Get port number from command line
-        port = DEFAULT_PORT
-    else : 
-        port = int(sys.argv[1])
-        if(len(sys.argv) > 2 ):
-            SERVER_FILE = sys.argv[2]
-            if(len(sys.argv) > 3):
-                NUM_THREADS = int(sys.argv[3])
-                if(len(sys.argv) > 4):
-                    QUEUE_SIZE = int(sys.argv[4])            
-    HOST = '' #Start on localhost
-    pool = ThreadPool(NUM_THREADS, QUEUE_SIZE)   #Create Thread pool with queue size stated
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((HOST, port))
+def main(): 
+    global DEBUG, NUM_THREADS, QUEUE_SIZE, DEFAULT_PORT, IP_Address, SERVER_FILE
     try: 
-        s.listen(1)#Start listening
-        list = [s] #List of sockets
-        while readOnline():
-            read, _, _ = select.select(list, [], [], 0.1)#Set timeout to 0.1 for non-blocking socket
-            for sock in read:
-                if(sock is s):#Server socket 
-                    c, a = sock.accept()#Get info and pass to thread pool
-                    pool.addTask(handleClient, c,a)
-        pool.endThreads()#Finish threads    
-        s.close()#Close sockets
-        print "Server shutting down..."
+        port = DEFAULT_PORT
+        DIRECTORY = sys.argv[1]
+        if(len(sys.argv) > 3) : #Get port number from command line
+            DEBUG = sys.argv[2] > 0
+            if(len(sys.argv) > 2) :
+                port = int(sys.argv[2])
+                if(len(sys.argv) > 3 ):
+                    SERVER_FILE = sys.argv[3]
+                    if(len(sys.argv) > 4):
+                        NUM_THREADS = int(sys.argv[4])
+                        if(len(sys.argv) > 4):
+                            QUEUE_SIZE = in5(sys.argv[5])           
+        log("IP: " + IP_Address)
+        HOST = '' #Start on localhost
+        pool = ThreadPool(NUM_THREADS, QUEUE_SIZE)   #Create Thread pool with queue size stated
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((HOST, port))
+        try: 
+            s.listen(1)#Start listening
+            list = [s] #List of sockets
+            while readOnline():
+                read, _, _ = select.select(list, [], [], 0.1)#Set timeout to 0.1 for non-blocking socket
+                for sock in read:
+                    if(sock is s):#Server socket 
+                        c, a = sock.accept()#Get info and pass to thread pool
+                        pool.addTask(handleClient, c,a)
+            pool.endThreads()#Finish threads    
+            s.close()#Close sockets
+            print "Server shutting down..."
+        except Exception, e:
+            print e
+        finally:
+            s.close()
     except Exception, e:
         print e
-    finally:
-        s.close()
-except Exception, e:
-    print e
-        
+
+main()
